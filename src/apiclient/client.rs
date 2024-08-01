@@ -51,7 +51,8 @@ mod tests {
     #[tokio::test]
     async fn gateway_test() {
         let client = ApiClient::new("").unwrap();
-        client.get_gateway(false).await.unwrap();
+        let url = client.get_gateway(false).await.unwrap();
+        assert_eq!("wss", &url.as_str()[..=2]);
     }
 
     #[tokio::test]

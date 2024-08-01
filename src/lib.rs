@@ -1,7 +1,10 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 pub const API_VERSION: u8 = 10;
 
 mod apiclient;
-mod gatewayclient;
+mod gateway;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
