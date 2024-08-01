@@ -1,28 +1,18 @@
+use super::error::ApiClientError;
+use super::links::*;
 use reqwest::{
     header::{self, HeaderMap},
-    Client,
+    Client, Url,
 };
-use std::error::Error;
+use serde_json::Value;
 
+#[derive(Debug)]
 pub struct ApiClient {
     client: Client,
 }
 
-#[derive(Debug)]
-pub struct ApiClientError<'a>(Box<dyn Error + Send + Sync + 'a>);
-
-impl<'a, T> From<T> for ApiClientError<'a>
-where
-    T: Error + Send + Sync + 'a,
-{
-    fn from(value: T) -> Self {
-        let bx = Box::new(value);
-        ApiClientError(bx)
-    }
-}
-
 impl ApiClient {
-    pub async fn new(token: &str) -> Result<Self, ApiClientError> {
+    pub fn new(token: &str) -> Result<Self, ApiClientError> {
         let mut headers = HeaderMap::new();
 
         let mut auth = header::HeaderValue::from_str(token)?;
@@ -33,5 +23,41 @@ impl ApiClient {
         let client = Client::builder().default_headers(headers).build()?;
 
         Ok(Self { client })
+    }
+    pub async fn get_gateway(&self, bot: bool) -> Result<Url, ApiClientError> {
+        let endpoint = if bot {
+            GET_GATEWAY_BOT_ENDPOINT
+        } else {
+            GET_GATEWAY_ENDPOINT
+        };
+
+        let response = self
+            .client
+            .get(format!("{}{}", API_LINK, endpoint))
+            .send()
+            .await?;
+
+        let mut json: Value = response.json().await?;
+        let url: String = serde_json::from_value(json["url"].take())?;
+
+        Ok(Url::parse(&url)?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ApiClient;
+
+    #[tokio::test]
+    async fn gateway_test() {
+        let client = ApiClient::new("").unwrap();
+        client.get_gateway(false).await.unwrap();
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn gateway_bot_test() {
+        let client = ApiClient::new("").unwrap();
+        client.get_gateway(true).await.unwrap(); // invalid token provided -> panic
     }
 }

@@ -178,6 +178,9 @@ version = "0.1.0"
 dependencies = [
  "const_format",
  "reqwest",
+ "serde",
+ "serde_derive",
+ "serde_json",
  "tokio",
  "tokio-tungstenite",
 ]
