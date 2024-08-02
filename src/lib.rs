@@ -4,6 +4,7 @@
 pub const API_VERSION: u8 = 10;
 
 mod apiclient;
+mod error;
 mod gateway;
 
 pub fn add(left: usize, right: usize) -> usize {

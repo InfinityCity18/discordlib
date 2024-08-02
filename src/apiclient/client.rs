@@ -1,5 +1,8 @@
-use super::error::ApiClientError;
+use crate::error::IntoBox;
+
+use super::error::{ApiClientError, IntoBox};
 use super::links::*;
+use reqwest::header::{HeaderValue, InvalidHeaderValue};
 use reqwest::{
     header::{self, HeaderMap},
     Client, Url,
@@ -15,12 +18,17 @@ impl ApiClient {
     pub fn new(token: &str) -> Result<Self, ApiClientError> {
         let mut headers = HeaderMap::new();
 
-        let mut auth = header::HeaderValue::from_str(token)?;
+        let mut auth: HeaderValue = <Result<HeaderValue, InvalidHeaderValue> as IntoBox<
+            Result<HeaderValue, ApiClientError>,
+        >>::intobox(header::HeaderValue::from_str(token))?;
         auth.set_sensitive(true);
 
         headers.insert(header::AUTHORIZATION, auth);
 
-        let client = Client::builder().default_headers(headers).build()?;
+        let client = Client::builder()
+            .default_headers(headers)
+            .build()
+            .intobox()?;
 
         Ok(Self { client })
     }
@@ -35,12 +43,13 @@ impl ApiClient {
             .client
             .get(format!("{}{}", API_LINK, endpoint))
             .send()
-            .await?;
+            .await
+            .intobox()?;
 
-        let mut json: Value = response.json().await?;
-        let url: String = serde_json::from_value(json["url"].take())?;
+        let mut json: Value = response.json().await.intobox()?;
+        let url: String = serde_json::from_value(json["url"].take()).intobox()?;
 
-        Ok(Url::parse(&url)?)
+        Ok(Url::parse(&url).intobox()?)
     }
 }
 
