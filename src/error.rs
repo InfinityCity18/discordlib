@@ -8,7 +8,7 @@ macro_rules! error_template {
 
         impl fmt::Display for $name {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(f, "{} ( {} )", "$name", self.0)
+                write!(f, "{} ( {} )", stringify!($name), self.0)
             }
         }
 
@@ -25,7 +25,23 @@ macro_rules! error_template {
     };
 }
 
+macro_rules! error_unit {
+    ($name:ident) => {
+        #[derive(Debug)]
+        pub struct $name;
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, stringify!($name))
+            }
+        }
+
+        impl std::error::Error for $name {}
+    };
+}
+
 pub(crate) use error_template;
+pub(crate) use error_unit;
 
 pub trait BoxErr<T, E> {
     fn bx(self) -> Result<T, Box<E>>;

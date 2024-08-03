@@ -3,7 +3,7 @@
 
 pub const API_VERSION: u8 = 10;
 
-mod apiclient;
+mod api;
 mod error;
 mod gateway;
 

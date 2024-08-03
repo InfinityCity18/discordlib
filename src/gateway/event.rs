@@ -1,6 +1,7 @@
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Value;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,7 +16,8 @@ pub struct GatewayEvent {
     pub event_name: Option<String>,
 }
 
-#[derive(PartialEq, Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(PartialEq, Clone, Debug, Deserialize_repr, Serialize_repr, Default)]
+#[repr(u8)]
 pub enum OpCode {
     #[default]
     Dispatch = 0,
