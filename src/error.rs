@@ -1,36 +1,41 @@
-pub trait IntoBox<T> {
-    fn intobox(self) -> T;
-}
-
 macro_rules! error_template {
     ($name:ident) => {
-        pub use crate::error::IntoBox;
         use std::error::Error;
         use std::fmt;
 
         #[derive(Debug)]
-        pub struct $name<'a>(Box<dyn Error + Sync + Send + 'a>);
+        pub struct $name(Box<dyn Error + Send + Sync>);
 
-        impl fmt::Display for $name<'_> {
+        impl fmt::Display for $name {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(f, "{} ( {} )", stringify!($name), self.0)
+                write!(f, "{} ( {} )", "$name", self.0)
             }
         }
 
-        impl Error for $name<'_> {}
+        impl Error for $name {}
 
-        impl<'a, T, E> IntoBox<Result<T, $name<'a>>> for Result<T, E>
+        impl<T> From<Box<T>> for $name
         where
-            E: Error + Send + Sync + 'a,
+            T: Error + Send + Sync + 'static,
         {
-            fn intobox(self) -> Result<T, $name<'a>> {
-                match self {
-                    Ok(ok) => Ok(ok),
-                    Err(err) => Err($name(Box::new(err))),
-                }
+            fn from(value: Box<T>) -> Self {
+                $name(value)
             }
         }
     };
 }
 
 pub(crate) use error_template;
+
+pub trait BoxErr<T, E> {
+    fn bx(self) -> Result<T, Box<E>>;
+}
+
+impl<T, E> BoxErr<T, E> for Result<T, E> {
+    fn bx(self: Result<T, E>) -> Result<T, Box<E>> {
+        match self {
+            Ok(ok) => Ok(ok),
+            Err(err) => Err(Box::new(err)),
+        }
+    }
+}
