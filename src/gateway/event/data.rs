@@ -26,16 +26,15 @@ pub enum EventData {
         guilds: Vec<UnavailableGuild>,
         session_id: String,
         resume_gateway_url: String,
-        application: Application,
     },
     Other(Value),
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConnectionProperties {
-    os: String,
-    browser: String,
-    device: String,
+    pub os: String,
+    pub browser: String,
+    pub device: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,21 +44,9 @@ pub struct UnavailableGuild {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Application {
-    id: String,
-    name: String,
-    icon: String,
-    description: String,
-    bot_public: bool,
-    bot_require_code_grant: bool,
-    verify_key: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct User {
     id: String,
     username: String,
     discriminator: String,
-    global_name: String,
     avatar: String,
 }

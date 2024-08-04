@@ -1,10 +1,12 @@
 use crate::{error::BoxErr, API_VERSION};
+use core::panic;
 use errors::{EmptyEventDataError, MessageError, NoHeartbeatACKError, NotHelloError};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use reqwest::{get, Url};
 use std::error::Error;
 use std::ops::Not;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
@@ -14,7 +16,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use super::error::GatewayClientError;
-use super::event::{EventData, GatewayEvent, OpCode};
+use super::event::{ConnectionProperties, EventData, GatewayEvent, OpCode};
 use crate::api::ApiClient;
 use std::sync::Arc;
 
@@ -24,17 +26,26 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 const JITTER: u64 = 2;
 
+pub struct GatewayInit {
+    token: String,
+    bot: bool,
+    intents: u32,
+    conn_properties: ConnectionProperties,
+}
+
 struct GatewayClient {
     gateway_url: Url,
+    resume_gateway_url: Url,
+    session_id: String,
+    token: String,
 }
 
 impl GatewayClient {
     async fn new(
         api_client: Arc<ApiClient>,
-        token: &str,
-        bot: bool,
+        init_info: GatewayInit,
     ) -> Result<Self, GatewayClientError> {
-        let mut gateway_url = api_client.get_gateway(bot).await.bx()?;
+        let mut gateway_url = api_client.get_gateway(init_info.bot).await.bx()?;
         gateway_url.set_query(Some(format!("v={}", API_VERSION).as_str()));
         gateway_url.set_query(Some("encoding=json"));
 
@@ -64,7 +75,7 @@ impl GatewayClient {
 
         tokio::time::sleep(Duration::from_millis(hb_interval / JITTER)).await;
 
-        send_msg(first_hb, wstx).await?;
+        send_msg(first_hb, wstx.clone()).await?;
         get_msg(sender.clone(), wsrx.clone()).await?;
 
         let ack: GatewayEvent = receiver.recv().await.unwrap().try_into()?;
@@ -72,15 +83,46 @@ impl GatewayClient {
             return Err(NoHeartbeatACKError).bx()?;
         }
 
-        Ok(GatewayClient { gateway_url })
+        let identify = GatewayEvent {
+            op: OpCode::Identify,
+            event_data: Some(EventData::Identify {
+                token: init_info.token.clone(),
+                properties: init_info.conn_properties,
+                intents: init_info.intents,
+            }),
+            ..Default::default()
+        };
+
+        send_msg(identify.try_into().bx()?, wstx.clone()).await?;
+        get_msg(sender.clone(), wsrx.clone()).await?;
+
+        let ready: GatewayEvent = receiver.recv().await.unwrap().try_into()?;
+
+        let (session_id, resume_gateway_url) = if let EventData::Ready {
+            v: _,
+            user: _,
+            guilds: _,
+            session_id,
+            resume_gateway_url,
+        } = ready.event_data.unwrap()
+        {
+            (session_id, resume_gateway_url)
+        } else {
+            panic!();
+        };
+
+        Ok(GatewayClient {
+            gateway_url,
+            resume_gateway_url: Url::from_str(&resume_gateway_url).bx()?,
+            session_id,
+            token: init_info.token,
+        })
     }
 }
 
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
 }
-
-async fn supervisor() {}
 
 async fn send_msg(msg: Message, tx: WsTx) -> Result<(), BoxError> {
     let mut lock = tx.lock().await;
@@ -105,13 +147,21 @@ mod errors {
 
 #[cfg(test)]
 mod tests {
-    use super::GatewayClient;
-    use crate::api::ApiClient;
+    use super::{GatewayClient, GatewayInit};
+    use crate::{api::ApiClient, gateway::event::ConnectionProperties};
 
     #[tokio::test]
     async fn placeholder() {
         let apiclient = crate::api::ApiClient::new("").unwrap();
-        let _gatewayclient = GatewayClient::new(std::sync::Arc::new(apiclient), "", false)
+        let init = GatewayInit {
+            bot: false,
+            token: String::from(""),
+            intents: 0,
+            conn_properties: ConnectionProperties {
+                ..Default::default()
+            },
+        };
+        let _gatewayclient = GatewayClient::new(std::sync::Arc::new(apiclient), init)
             .await
             .unwrap();
     }
