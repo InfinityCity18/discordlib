@@ -2,6 +2,9 @@ use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Value;
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use tokio_tungstenite::tungstenite::Message;
+
+use crate::error::BoxErr;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +17,22 @@ pub struct GatewayEvent {
     pub seq: Option<u32>,
     #[serde(rename = "t")]
     pub event_name: Option<String>,
+}
+
+impl GatewayEvent {
+    pub fn heartbeat(seq: u32) -> Self {
+        Self {
+            op: OpCode::Heartbeat,
+            seq: Some(seq),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<GatewayEvent> for Message {
+    fn from(value: GatewayEvent) -> Self {
+        Message::text(serde_json::to_string(&value).unwrap())
+    }
 }
 
 #[derive(PartialEq, Clone, Debug, Deserialize_repr, Serialize_repr, Default)]

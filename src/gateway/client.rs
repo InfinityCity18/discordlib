@@ -1,9 +1,10 @@
 use crate::{error::BoxErr, API_VERSION};
-use errors::NotHelloError;
+use errors::{EmptyEventDataError, NotHelloError};
 use futures_util::{SinkExt, StreamExt};
 use reqwest::Url;
 use std::error::Error;
 use std::ops::Not;
+use std::time::Duration;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use super::error::GatewayClientError;
@@ -31,11 +32,29 @@ impl GatewayClient {
             Err(NotHelloError).bx()?;
         }
 
-        dbg!(init_msg);
+        let mut hb_interval = init_msg.event_data.ok_or(EmptyEventDataError).bx()?.take();
+        let hb_interval = hb_interval
+            .get_mut("heartbeat_interval")
+            .ok_or(EmptyEventDataError)
+            .bx()?
+            .take();
+        let hb_interval: f64 = serde_json::from_value(hb_interval).bx()?;
+        let hb_interval = hb_interval / 1000.0;
+
+        dbg!(hb_interval);
+
+        let first_hb = GatewayEvent::heartbeat(0u32);
+        let first_hb = Message::from(first_hb);
+
+        tokio::time::sleep(Duration::from_secs_f64(hb_interval * JITTER)).await;
+
+        wsstream.send(first_hb).await.bx()?;
 
         Ok(GatewayClient { gateway_url })
     }
 }
+
+async fn supervisor() {}
 
 mod errors {
     use crate::error::error_unit;
