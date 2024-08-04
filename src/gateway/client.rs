@@ -19,7 +19,11 @@ struct GatewayClient {
 }
 
 impl GatewayClient {
-    async fn new(api_client: Arc<ApiClient>, bot: bool) -> Result<Self, GatewayClientError> {
+    async fn new(
+        api_client: Arc<ApiClient>,
+        token: &str,
+        bot: bool,
+    ) -> Result<Self, GatewayClientError> {
         let mut gateway_url = api_client.get_gateway(bot).await.bx()?;
         gateway_url.set_query(Some(format!("v={}", API_VERSION).as_str()));
         gateway_url.set_query(Some("encoding=json"));
@@ -50,6 +54,8 @@ impl GatewayClient {
 
         wsstream.send(first_hb).await.bx()?;
 
+        dbg!(wsstream.next().await);
+
         Ok(GatewayClient { gateway_url })
     }
 }
@@ -70,7 +76,7 @@ mod tests {
     #[tokio::test]
     async fn placeholder() {
         let apiclient = crate::api::ApiClient::new("").unwrap();
-        let _gatewayclient = GatewayClient::new(std::sync::Arc::new(apiclient), false)
+        let _gatewayclient = GatewayClient::new(std::sync::Arc::new(apiclient), "", false)
             .await
             .unwrap();
     }
