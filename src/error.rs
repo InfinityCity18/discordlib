@@ -22,6 +22,12 @@ macro_rules! error_template {
                 $name(value)
             }
         }
+
+        impl From<Box<dyn Error + Send + Sync>> for $name {
+            fn from(value: Box<dyn Error + Send + Sync>) -> Self {
+                $name(value)
+            }
+        }
     };
 }
 

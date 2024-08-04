@@ -36,14 +36,18 @@ impl GatewayEvent {
     }
 }
 
-impl From<GatewayEvent> for Message {
-    fn from(value: GatewayEvent) -> Self {
-        Message::text(serde_json::to_string(&value).unwrap())
+impl TryFrom<GatewayEvent> for Message {
+    type Error = serde_json::Error;
+
+    fn try_from(value: GatewayEvent) -> Result<Self, Self::Error> {
+        Ok(Message::text(serde_json::to_string(&value)?))
     }
 }
 
-impl From<Message> for GatewayEvent {
-    fn from(value: Message) -> Self {
-        serde_json::from_str(value.to_text().unwrap()).unwrap()
+impl TryFrom<Message> for GatewayEvent {
+    type Error = Box<dyn std::error::Error + Sync + Send>;
+
+    fn try_from(value: Message) -> Result<Self, Self::Error> {
+        Ok(serde_json::from_str(value.to_text()?)?)
     }
 }
