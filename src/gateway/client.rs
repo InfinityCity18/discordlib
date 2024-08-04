@@ -8,11 +8,11 @@ use std::time::Duration;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use super::error::GatewayClientError;
-use super::event::{GatewayEvent, OpCode};
+use super::event::{EventData, GatewayEvent, OpCode};
 use crate::api::ApiClient;
 use std::sync::Arc;
 
-const JITTER: f64 = 0.5;
+const JITTER: u64 = 2;
 
 struct GatewayClient {
     gateway_url: Url,
@@ -29,6 +29,7 @@ impl GatewayClient {
         gateway_url.set_query(Some("encoding=json"));
 
         let (mut wsstream, _) = connect_async(gateway_url.as_str()).await.bx()?;
+        let init_msg: GatewayEvent = wsstream.next().await.unwrap().bx()?.into();
         let init_msg: GatewayEvent =
             serde_json::from_str(wsstream.next().await.unwrap().bx()?.to_text().bx()?).bx()?;
 
@@ -36,25 +37,19 @@ impl GatewayClient {
             Err(NotHelloError).bx()?;
         }
 
-        let mut hb_interval = init_msg.event_data.ok_or(EmptyEventDataError).bx()?.take();
-        let hb_interval = hb_interval
-            .get_mut("heartbeat_interval")
-            .ok_or(EmptyEventDataError)
-            .bx()?
-            .take();
-        let hb_interval: f64 = serde_json::from_value(hb_interval).bx()?;
-        let hb_interval = hb_interval / 1000.0;
-
-        dbg!(hb_interval);
+        let event_data = init_msg.event_data.ok_or(EmptyEventDataError).bx()?;
+        let hb_interval = if let EventData::Hello { heartbeat_interval } = event_data {
+            heartbeat_interval
+        } else {
+            return Err(NotHelloError).bx()?;
+        };
 
         let first_hb = GatewayEvent::heartbeat(0u32);
         let first_hb = Message::from(first_hb);
 
-        tokio::time::sleep(Duration::from_secs_f64(hb_interval * JITTER)).await;
+        tokio::time::sleep(Duration::from_millis(hb_interval / JITTER)).await;
 
         wsstream.send(first_hb).await.bx()?;
-
-        dbg!(wsstream.next().await);
 
         Ok(GatewayClient { gateway_url })
     }
@@ -66,6 +61,7 @@ mod errors {
     use crate::error::error_unit;
     error_unit!(EmptyEventDataError);
     error_unit!(NotHelloError);
+    error_unit!(NoHeartbeatACKError);
 }
 
 #[cfg(test)]

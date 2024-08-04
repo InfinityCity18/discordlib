@@ -1,7 +1,9 @@
+use std::default;
+
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum EventData {
     Identify {
@@ -14,12 +16,50 @@ pub enum EventData {
         session_id: String,
         seq: u32,
     },
+    Heartbeat(u32),
+    Hello {
+        heartbeat_interval: u64,
+    },
+    Ready {
+        v: u8,
+        user: User,
+        guilds: Vec<UnavailableGuild>,
+        session_id: String,
+        resume_gateway_url: String,
+        application: Application,
+    },
     Other(Value),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConnectionProperties {
     os: String,
     browser: String,
     device: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UnavailableGuild {
+    pub id: String,
+    pub unavailable: bool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Application {
+    id: String,
+    name: String,
+    icon: String,
+    description: String,
+    bot_public: bool,
+    bot_require_code_grant: bool,
+    verify_key: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct User {
+    id: String,
+    username: String,
+    discriminator: String,
+    global_name: String,
+    avatar: String,
 }
