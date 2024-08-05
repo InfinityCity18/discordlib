@@ -11,6 +11,7 @@ use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::WebSocket;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
@@ -46,7 +47,13 @@ impl GatewayClient {
     async fn new(
         api_client: Arc<ApiClient>,
         init_info: GatewayInit,
-    ) -> Result<Arc<Self>, GatewayClientError> {
+    ) -> Result<
+        (
+            Arc<Self>,
+            JoinHandle<Result<(), super::supervisor::errors::SupervisorError>>,
+        ),
+        GatewayClientError,
+    > {
         let mut gateway_url = api_client.get_gateway(init_info.bot).await.bx()?;
         gateway_url.set_query(Some(format!("v={}", API_VERSION).as_str()));
         gateway_url.set_query(Some("encoding=json"));
@@ -126,7 +133,7 @@ impl GatewayClient {
             rx: public_rx,
         });
 
-        tokio::spawn(super::supervisor::supervisor(
+        let supervisor_handle = tokio::spawn(super::supervisor::supervisor(
             ptr.clone(),
             supervisor_tx,
             supervisor_rx,
@@ -136,7 +143,7 @@ impl GatewayClient {
             ready.seq.unwrap(),
         ));
 
-        return Ok(ptr);
+        return Ok((ptr, supervisor_handle));
     }
 }
 
@@ -181,8 +188,10 @@ mod tests {
                 ..Default::default()
             },
         };
-        let _gatewayclient = GatewayClient::new(std::sync::Arc::new(apiclient), init)
+        let (_gatewayclient, handle) = GatewayClient::new(std::sync::Arc::new(apiclient), init)
             .await
             .unwrap();
+
+        handle.await.unwrap().unwrap();
     }
 }
