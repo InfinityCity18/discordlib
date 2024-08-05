@@ -29,6 +29,7 @@ pub enum EventData {
     },
     InvalidSession(bool),
     Other(Value),
+    Seq(u32),
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

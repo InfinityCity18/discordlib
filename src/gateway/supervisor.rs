@@ -7,6 +7,7 @@ use super::event::EventData;
 use super::event::GatewayEvent;
 use super::event::OpCode;
 use errors::{ConnectionClosed, SupervisorError};
+use futures_util::SinkExt;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -14,18 +15,20 @@ use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
 
 pub async fn supervisor(
-    _client: Arc<GatewayClient>,
     api_tx: UnboundedSender<GatewayEvent>,
     _api_rx: UnboundedReceiver<GatewayEvent>,
     wstx: WsTx,
     wsrx: WsRx,
     hb_interval: u64,
     mut seq: u32,
+    kill_oneshot: tokio::sync::oneshot::Receiver<bool>,
 ) -> Result<(), errors::SupervisorError> {
     let (msg_sender, mut msg_receiver) = tokio::sync::mpsc::unbounded_channel::<Message>();
 
     let hb_timer = spawn_hb_sleeper(hb_interval);
     tokio::pin!(hb_timer);
+
+    tokio::pin!(kill_oneshot);
 
     tokio::spawn(get_msg(msg_sender.clone(), wsrx.clone()));
 
@@ -60,7 +63,7 @@ pub async fn supervisor(
                     OpCode::InvalidSession => {
                         if let Some(EventData::InvalidSession(resume)) = event.event_data {
                             if resume {
-                                api_tx.send(GatewayEvent { op: OpCode::Resume, event_data: None, seq: None, event_name: None }).bx()?;
+                                api_tx.send(GatewayEvent { op: OpCode::Resume, event_data: Some(EventData::Seq(seq)), seq: None, event_name: None }).bx()?;
                                 return Ok(());
                             } else {
                                 api_tx.send(GatewayEvent { op: OpCode::NonDiscordClosed, event_data: None, seq: None, event_name: None }).bx()?;
@@ -69,12 +72,22 @@ pub async fn supervisor(
                         }
                     },
                     OpCode::Reconnect => {
-                        api_tx.send(GatewayEvent { op: OpCode::Resume, event_data: None, seq: None, event_name: None }).bx()?;
+                        api_tx.send(GatewayEvent { op: OpCode::Resume, event_data: Some(EventData::Seq(seq)), seq: None, event_name: None }).bx()?;
                         return Ok(());
                     },
                     _ => panic!(),
                 }
                 tokio::spawn(get_msg(msg_sender.clone(), wsrx.clone()));
+            }
+        kill = &mut kill_oneshot => {
+                let result = kill.bx()?;
+                if result {
+                    wstx.lock().await.close().await.bx()?;
+                    drop(wsrx);
+                    return Ok(());
+                } else {
+                    panic!("got false from oneshot");
+                }
             }
         }
     }
