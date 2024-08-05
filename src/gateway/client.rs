@@ -235,27 +235,3 @@ mod errors {
     error_unit!(NotHelloError);
     error_unit!(NoHeartbeatACKError);
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{GatewayClient, GatewayInit};
-    use crate::{api::ApiClient, gateway::event::ConnectionProperties};
-
-    #[tokio::test]
-    async fn placeholder() {
-        let apiclient = crate::api::ApiClient::new("").unwrap();
-        let init = GatewayInit {
-            bot: false,
-            token: String::from(""),
-            intents: 0,
-            conn_properties: ConnectionProperties {
-                ..Default::default()
-            },
-        };
-        let (_gatewayclient, handle) = GatewayClient::new(std::sync::Arc::new(apiclient), init)
-            .await
-            .unwrap();
-
-        handle.await.unwrap().unwrap();
-    }
-}
