@@ -20,11 +20,11 @@ use super::event::{ConnectionProperties, EventData, GatewayEvent, OpCode};
 use crate::api::ApiClient;
 use std::sync::Arc;
 
-type WsTx = Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>;
-type WsRx = Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>;
+pub type WsTx = Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>;
+pub type WsRx = Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>;
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-const JITTER: u64 = 2;
+const JITTER: u64 = 20;
 
 pub struct GatewayInit {
     token: String,
@@ -33,18 +33,20 @@ pub struct GatewayInit {
     conn_properties: ConnectionProperties,
 }
 
-struct GatewayClient {
+pub struct GatewayClient {
     gateway_url: Url,
     resume_gateway_url: Url,
     session_id: String,
     token: String,
+    tx: mpsc::UnboundedSender<GatewayEvent>,
+    rx: mpsc::UnboundedReceiver<GatewayEvent>,
 }
 
 impl GatewayClient {
     async fn new(
         api_client: Arc<ApiClient>,
         init_info: GatewayInit,
-    ) -> Result<Self, GatewayClientError> {
+    ) -> Result<Arc<Self>, GatewayClientError> {
         let mut gateway_url = api_client.get_gateway(init_info.bot).await.bx()?;
         gateway_url.set_query(Some(format!("v={}", API_VERSION).as_str()));
         gateway_url.set_query(Some("encoding=json"));
@@ -97,6 +99,7 @@ impl GatewayClient {
         get_msg(sender.clone(), wsrx.clone()).await?;
 
         let ready: GatewayEvent = receiver.recv().await.unwrap().try_into()?;
+        dbg!(&ready);
 
         let (session_id, resume_gateway_url) = if let EventData::Ready {
             v: _,
@@ -111,12 +114,29 @@ impl GatewayClient {
             panic!();
         };
 
-        Ok(GatewayClient {
+        let (public_tx, supervisor_rx) = mpsc::unbounded_channel::<GatewayEvent>();
+        let (supervisor_tx, public_rx) = mpsc::unbounded_channel::<GatewayEvent>();
+
+        let ptr = Arc::new(GatewayClient {
             gateway_url,
             resume_gateway_url: Url::from_str(&resume_gateway_url).bx()?,
             session_id,
             token: init_info.token,
-        })
+            tx: public_tx,
+            rx: public_rx,
+        });
+
+        tokio::spawn(super::supervisor::supervisor(
+            ptr.clone(),
+            supervisor_tx,
+            supervisor_rx,
+            wstx,
+            wsrx,
+            hb_interval,
+            ready.seq.unwrap(),
+        ));
+
+        return Ok(ptr);
     }
 }
 
@@ -124,13 +144,13 @@ fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
 }
 
-async fn send_msg(msg: Message, tx: WsTx) -> Result<(), BoxError> {
+pub async fn send_msg(msg: Message, tx: WsTx) -> Result<(), BoxError> {
     let mut lock = tx.lock().await;
     lock.send(msg).await.bx()?;
     Ok(())
 }
 
-async fn get_msg(sender: mpsc::UnboundedSender<Message>, rx: WsRx) -> Result<(), BoxError> {
+pub async fn get_msg(sender: mpsc::UnboundedSender<Message>, rx: WsRx) -> Result<(), BoxError> {
     let mut lock = rx.lock().await;
     let msg = lock.next().await.unwrap()?;
     sender.send(msg)?;
