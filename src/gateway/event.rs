@@ -34,6 +34,18 @@ impl GatewayEvent {
             ..Default::default()
         }
     }
+
+    pub fn resume(seq: u32, token: String, session_id: String) -> Self {
+        Self {
+            op: OpCode::Resume,
+            event_data: Some(EventData::Resume {
+                token,
+                session_id,
+                seq,
+            }),
+            ..Default::default()
+        }
+    }
 }
 
 impl TryFrom<GatewayEvent> for Message {

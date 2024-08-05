@@ -15,4 +15,5 @@ pub enum OpCode {
     InvalidSession = 9,
     Hello = 10,
     HeartbeatACK = 11,
+    NonDiscordClosed = 12,
 }

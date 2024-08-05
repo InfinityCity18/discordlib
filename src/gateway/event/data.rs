@@ -27,6 +27,7 @@ pub enum EventData {
         session_id: String,
         resume_gateway_url: String,
     },
+    InvalidSession(bool),
     Other(Value),
 }
 

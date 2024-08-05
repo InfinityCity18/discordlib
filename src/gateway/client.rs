@@ -36,8 +36,8 @@ pub struct GatewayInit {
 pub struct GatewayClient {
     gateway_url: Url,
     resume_gateway_url: Url,
-    session_id: String,
-    token: String,
+    pub session_id: String,
+    pub token: String,
     tx: mpsc::UnboundedSender<GatewayEvent>,
     rx: mpsc::UnboundedReceiver<GatewayEvent>,
 }
