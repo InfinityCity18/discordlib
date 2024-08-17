@@ -1,5 +1,7 @@
 
 # discordlib
+![](/example_logs.png)
+
 Basic library for discord written in rust
 
 
